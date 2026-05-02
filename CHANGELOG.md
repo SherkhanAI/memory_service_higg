@@ -36,16 +36,42 @@ turn. All three are addressable without changing the schema.
   temporal categories went 0.75 -> 1.00 and 0.67 -> 1.00 respectively.
 
 **Result.**
-- Synthetic memeval: 0.82 -> 0.76 overall (recall +0.25, temporal +0.33,
-  abstention -1.00 on purpose).
-- Real LongMemEval-S A/B vs v0.4.5: pending under deadline pressure
-  (N=3 seed=42, ~25 min).
 
-**Next.**
-- Multi-pass extraction (pass 2 for dates / counts / breeds into
-  `object_qualifiers`).
-- Re-enable `object_qualifiers` in the strict schema as JSON-encoded
-  string field.
+Synthetic memeval: 0.82 -> 0.76 overall (recall +0.25, temporal +0.33,
+abstention -1.00 by design).
+
+Real LongMemEval-S A/B at the same N=12 seed=42 sample as v0.4.5:
+
+| Category         | v0.4.5 N=12 | v0.5+ N=12 | Δ      |
+|------------------|-------------|------------|--------|
+| knowledge_update | 1.00        | 0.83       | -0.17  |
+| multi_session    | 0.67        | **0.33**   | **-0.34** |
+| single_session   | 0.67        | 0.67       | 0      |
+| temporal         | 0.67        | **1.00**   | **+0.33** |
+| **overall**      | **0.75**    | **0.71**   | -0.04  |
+
+Wall clock 28 min, no 402s.
+
+**Honest read.**
+- Temporal +33pp is a clear win - the contextual prefix names the
+  date / event explicitly so retrieval keys on it, and the verbatim
+  source repair keeps dates in the `src="..."` quote so the judge
+  sees them.
+- Multi_session -34pp is a real regression. Hypothesis: the
+  contextual prefix biases each turn's embedding toward its OWN
+  topical summary, which makes cross-session retrieval harder
+  (the same fact in two different sessions now embeds with two
+  different prefixes, drifting apart in cosine space). Confirms
+  Anthropic's caveat that Contextual Retrieval helps more with
+  ambiguous chunks than with cross-document linking.
+- Overall -4pp is within the N=12 confidence interval (±18pp); the
+  signal here is the per-category spread, not the aggregate.
+
+**Next (deferred to v0.6).**
+- Multi_session fix: keep raw_text embedding alongside the prefixed
+  one (dual embedding columns), or use a much shorter prefix
+  (10-15 words on entities only, no topical paraphrase).
+- Re-enable `object_qualifiers` for date/count fidelity.
 - Coreference window 2 -> 5 turns for long single-session probes.
 
 ---

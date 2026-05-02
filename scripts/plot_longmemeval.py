@@ -40,6 +40,17 @@ RESULTS: list[dict] = [
             "overall":          0.61,
         },
     },
+    {
+        "label": "v0.5+  N=12 (3/cat) seed=42  [+ROI: gate, prefix, source repair]",
+        "color": "#60a5fa",
+        "scores": {
+            "knowledge_update": 0.83,
+            "multi_session":    0.33,
+            "single_session":   0.67,
+            "temporal":         1.00,
+            "overall":          0.71,
+        },
+    },
 ]
 
 
