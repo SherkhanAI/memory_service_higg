@@ -1,0 +1,9 @@
+{
+  "recall": 0.75,
+  "multi_hop": 0.6666666666666666,
+  "temporal": 0.6666666666666666,
+  "supersession": 1.0,
+  "abstention": 1.0,
+  "isolation": 1.0,
+  "_overall": 0.8235294117647058
+}

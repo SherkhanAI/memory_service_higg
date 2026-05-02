@@ -1,0 +1,17 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.deepeval/
+.env
+*.log
+.idea/
+.vscode/
+
+# LongMemEval-S cleaned cache (265 MB, downloaded by src/eval/loader.py)
+fixtures/longmemeval/
+
+# OS / editor
+.DS_Store
+Thumbs.db

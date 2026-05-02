@@ -1,0 +1,142 @@
+{
+  "users": [
+    {
+      "user_id": "memeval_alex",
+      "description": "Software engineer Alex. Career arc Stripe → Notion (supersession), pet Biscuit, lives in SF, opinion arc on TypeScript.",
+      "sessions": [
+        {
+          "session_id": "memeval_alex_s1",
+          "ts": "2026-01-05T10:00:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Hey, I'm Alex. I just wanted to chat — I'm a backend engineer at Stripe and I've been thinking about side projects."},
+                {"role": "assistant", "content": "Nice to meet you Alex! Backend at Stripe is great experience. What kind of side projects are you considering?"}
+              ]
+            },
+            {
+              "messages": [
+                {"role": "user", "content": "Mostly developer tools. I've been writing TypeScript for years and I love it — feels like a superpower compared to plain JS."},
+                {"role": "assistant", "content": "TypeScript has come a long way. Are you thinking CLI tools or web apps?"}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s2",
+          "ts": "2026-01-12T19:30:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Quick question — I'm debugging a React dashboard, the whole thing re-renders on every keystroke in a search box. Driving me nuts."},
+                {"role": "assistant", "content": "Classic. Probably a parent component holding the input value and passing props down. Check React Profiler."}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s3",
+          "ts": "2026-01-20T08:15:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Walking Biscuit this morning, beautiful weather. The dog's basically forced me to start doing cardio."},
+                {"role": "assistant", "content": "Haha, dog ownership is the best fitness program. How long have you had him?"}
+              ]
+            },
+            {
+              "messages": [
+                {"role": "user", "content": "Three years. He's a golden retriever, total goofball."},
+                {"role": "assistant", "content": "Goldens are amazing companions."}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s4",
+          "ts": "2026-02-02T14:00:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Do you know any good vegetarian spots in San Francisco? I've lived here for five years and still find new places."},
+                {"role": "assistant", "content": "SF is great for that. Mission has Greens, and Hayes Valley has Souvla."}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s5",
+          "ts": "2026-02-18T11:45:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Big news — I just put in my notice at Stripe. I'm joining Notion next month as a senior backend engineer. Excited but nervous."},
+                {"role": "assistant", "content": "Congrats! That's a significant move. What drew you to Notion?"}
+              ]
+            },
+            {
+              "messages": [
+                {"role": "user", "content": "Honestly the product. I use it daily. And the engineering culture seems thoughtful."},
+                {"role": "assistant", "content": "Makes sense. When's your start date?"}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s6",
+          "ts": "2026-03-10T20:30:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Three weeks into Notion now. The codebase is huge but the team is great. Also: the TypeScript generics in this monorepo are getting on my nerves."},
+                {"role": "assistant", "content": "Big TS codebases can develop a 'generic gravity' — overly abstract types that hurt more than they help."}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_alex_s7",
+          "ts": "2026-04-01T09:00:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "Honest take after two months: TypeScript is fine for big projects but for quick scripts I just reach for Python now. Less ceremony."},
+                {"role": "assistant", "content": "That's a pragmatic stance. Right tool for the job."}
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "user_id": "memeval_taylor",
+      "description": "Designer Taylor. Used to test cross-user isolation — overlapping topics with Alex but distinct facts.",
+      "sessions": [
+        {
+          "session_id": "memeval_taylor_s1",
+          "ts": "2026-01-08T13:00:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "I'm Taylor, design lead at Figma. Based in NYC."},
+                {"role": "assistant", "content": "Nice — Figma's design culture is famous."}
+              ]
+            }
+          ]
+        },
+        {
+          "session_id": "memeval_taylor_s2",
+          "ts": "2026-02-04T18:00:00Z",
+          "turns": [
+            {
+              "messages": [
+                {"role": "user", "content": "I have a cat named Pixel. He sits on the keyboard whenever I'm in deep work mode."},
+                {"role": "assistant", "content": "Classic cat behavior. Pixel is a great name for a designer's cat."}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

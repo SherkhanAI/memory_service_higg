@@ -1,0 +1,59 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: memory-db
+    environment:
+      POSTGRES_DB: memory
+      POSTGRES_USER: memory
+      POSTGRES_PASSWORD: memory
+    volumes:
+      - memory-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memory -d memory"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memory-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://memory:memory@db:5432/memory
+      # OpenRouter (default gateway)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openrouter}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-google/gemini-embedding-2-preview}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1536}
+      EXTRACTION_PROVIDER: ${EXTRACTION_PROVIDER:-openrouter}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-openai/gpt-5.4-mini}
+      RERANKER_PROVIDER: ${RERANKER_PROVIDER:-jina}
+      RERANKER_MODEL: ${RERANKER_MODEL:-jina-reranker-v3}
+      # Direct-vendor keys (only used when *_PROVIDER != openrouter)
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      JINA_API_KEY: ${JINA_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      # Optional bearer auth
+      MEMORY_AUTH_TOKEN: ${MEMORY_AUTH_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  memory-db-data:
+    name: memory-db-data

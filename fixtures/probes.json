@@ -1,0 +1,27 @@
+{
+  "_doc": "LongMemEval-shaped probes. Each probe is asked AFTER `probe_after_session` has been ingested. expected_keywords: any of these strings (case-insensitive) appearing in the recall context counts as success. forbidden_keywords: appearance of ANY of these scores 0 (used for supersession + abstention).",
+  "probes": [
+    {"id": "recall_dog_name",      "category": "recall",       "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s4", "query": "What's my dog's name?",                                  "expected_keywords": ["Biscuit"],                                       "forbidden_keywords": []},
+    {"id": "recall_dog_breed",     "category": "recall",       "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s4", "query": "What breed of dog do I have?",                           "expected_keywords": ["golden retriever", "golden"],                    "forbidden_keywords": []},
+    {"id": "recall_city",          "category": "recall",       "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s4", "query": "Where do I live?",                                       "expected_keywords": ["San Francisco", "SF"],                           "forbidden_keywords": []},
+    {"id": "recall_diet",          "category": "recall",       "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s5", "query": "Do I have any dietary preferences?",                     "expected_keywords": ["vegetarian"],                                    "forbidden_keywords": []},
+
+    {"id": "multihop_city_via_pet","category": "multi_hop",    "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s5", "query": "What city does the user with the dog Biscuit live in?",  "expected_keywords": ["San Francisco", "SF"],                           "forbidden_keywords": []},
+    {"id": "multihop_role_at_now", "category": "multi_hop",    "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s6", "query": "What's my role at the company I joined recently?",       "expected_keywords": ["senior backend", "backend engineer", "Notion"],  "forbidden_keywords": []},
+    {"id": "multihop_languages",   "category": "multi_hop",    "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "Which languages do I use professionally?",               "expected_keywords": ["TypeScript", "Python"],                          "forbidden_keywords": []},
+
+    {"id": "temporal_before_now",  "category": "temporal",     "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s5", "query": "Where did I work before Notion?",                        "expected_keywords": ["Stripe"],                                        "forbidden_keywords": []},
+    {"id": "temporal_react_first", "category": "temporal",     "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "What was the first technical problem I asked you about?","expected_keywords": ["React", "re-render", "rerender", "dashboard"],   "forbidden_keywords": []},
+    {"id": "temporal_recent",      "category": "temporal",     "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "What's my most recent opinion on TypeScript?",           "expected_keywords": ["scripts", "Python", "ceremony", "big projects"], "forbidden_keywords": []},
+
+    {"id": "super_employer",       "category": "supersession", "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s6", "query": "Where do I currently work?",                             "expected_keywords": ["employer: Notion", "- employer: Notion"],        "forbidden_keywords": ["- employer: Stripe", "employer: Stripe ", "active: stripe"]},
+    {"id": "super_opinion_ts",     "category": "supersession", "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "What do I currently think about TypeScript?",            "expected_keywords": ["fine for big", "scripts", "Python now", "less ceremony"],"forbidden_keywords": []},
+
+    {"id": "abst_hiking",          "category": "abstention",   "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "What's my favorite hiking trail?",                       "expected_empty": true},
+    {"id": "abst_birthday",        "category": "abstention",   "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "When is my birthday?",                                   "expected_empty": true},
+    {"id": "abst_partner",         "category": "abstention",   "user_id": "memeval_alex",   "probe_after_session": "memeval_alex_s7", "query": "What is my partner's name?",                             "expected_empty": true},
+
+    {"id": "isolation_dog",        "category": "isolation",    "user_id": "memeval_taylor", "probe_after_session": "memeval_taylor_s2","query": "What pet do I have?",                                    "expected_keywords": ["cat", "Pixel"],                                  "forbidden_keywords": ["Biscuit", "dog"]},
+    {"id": "isolation_city",       "category": "isolation",    "user_id": "memeval_taylor", "probe_after_session": "memeval_taylor_s2","query": "Where am I based?",                                      "expected_keywords": ["NYC", "New York"],                               "forbidden_keywords": ["San Francisco", "SF"]}
+  ]
+}

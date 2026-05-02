@@ -1,0 +1,147 @@
+{
+  "n_per_category": 3,
+  "distractors": 6,
+  "seed": 42,
+  "overall": 0.75,
+  "per_category": {
+    "knowledge_update": 1.0,
+    "multi_session": 0.6666666666666666,
+    "single_session": 0.6666666666666666,
+    "temporal": 0.6666666666666666
+  },
+  "elapsed_s": 1351.1,
+  "details": [
+    {
+      "qid": "affe2881",
+      "category": "knowledge_update",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 144.1,
+      "recall_s": 1.4,
+      "ctx_len": 2228,
+      "n_citations": 9,
+      "reason": "The context explicitly says the user\u2019s species count in the local park is 32 (\u201cwhich brings my total species count to 32\u201d), which directly answers the question."
+    },
+    {
+      "qid": "50635ada",
+      "category": "knowledge_update",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 70.8,
+      "recall_s": 1.4,
+      "ctx_len": 2377,
+      "n_citations": 8,
+      "reason": "The context explicitly states the user's frequent flyer status as Premier Silver, which matches the gold answer. Even though the question asks for the previous status before the current status, the re"
+    },
+    {
+      "qid": "cc5ded98",
+      "category": "knowledge_update",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 82.7,
+      "recall_s": 1.5,
+      "ctx_len": 2031,
+      "n_citations": 8,
+      "reason": "The context explicitly states that the user has been dedicating about two hours each day to coding exercises, which directly matches the gold answer."
+    },
+    {
+      "qid": "gpt4_731e37d7",
+      "category": "multi_session",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 246.4,
+      "recall_s": 1.5,
+      "ctx_len": 2097,
+      "n_citations": 8,
+      "reason": "The context shows the user attended five workshops in the last three months and lists some individual amounts paid ($500, $200, $220), but it does not provide enough information to compute the total s"
+    },
+    {
+      "qid": "00ca467f",
+      "category": "multi_session",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 120.1,
+      "recall_s": 1.5,
+      "ctx_len": 2358,
+      "n_citations": 10,
+      "reason": "The context mentions one doctor's appointment on March 20th (follow-up with Dr. Thompson) and also mentions plans to schedule an appointment with Dr. Smith, but it does not clearly state that this sec"
+    },
+    {
+      "qid": "edced276_abs",
+      "category": "multi_session",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 62.7,
+      "recall_s": 1.4,
+      "ctx_len": 0,
+      "n_citations": 0,
+      "reason": "The context is empty, and the gold answer indicates the information is insufficient to determine the total because only Hawaii was mentioned and Seattle was not. For this kind of abstention/insufficie"
+    },
+    {
+      "qid": "bc8a6e93",
+      "category": "single_session",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 106.5,
+      "recall_s": 1.7,
+      "ctx_len": 2157,
+      "n_citations": 7,
+      "reason": "The context explicitly states that the user recently made a lemon blueberry cake for their niece's birthday party, which matches the gold answer exactly."
+    },
+    {
+      "qid": "70b3e69b",
+      "category": "single_session",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 45.7,
+      "recall_s": 1.4,
+      "ctx_len": 2703,
+      "n_citations": 9,
+      "reason": "The context shows the earlier discussion about Catalan political climate and mentions pro-Spanish perspectives, but it does not include the specific example of the Spanish-Catalan singer-songwriter. T"
+    },
+    {
+      "qid": "75f70248",
+      "category": "single_session",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 110.1,
+      "recall_s": 1.6,
+      "ctx_len": 2389,
+      "n_citations": 9,
+      "reason": "The context does mention that the user has a cat that sheds a lot and also references keeping the living room dust-free, which are relevant to sneezing and a living room trigger. However, it does not "
+    },
+    {
+      "qid": "dcfa8644",
+      "category": "temporal",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 128.9,
+      "recall_s": 1.5,
+      "ctx_len": 2288,
+      "n_citations": 8,
+      "reason": "The context gives the needed dates: the Adidas running shoes were bought on January 10th, and the broken shoelace on the old Converse sneakers was mentioned as happening on January 24th. That lets the"
+    },
+    {
+      "qid": "gpt4_1e4a8aeb",
+      "category": "temporal",
+      "verdict": "yes",
+      "score": 1.0,
+      "ingest_s": 83.3,
+      "recall_s": 1.4,
+      "ctx_len": 2358,
+      "n_citations": 10,
+      "reason": "The context explicitly states the gardening workshop was attended on 2023-04-15 and the tomato saplings were planted on 2023-04-21. That is a 6-day difference, matching the gold answer (with 7 days in"
+    },
+    {
+      "qid": "8c18457d",
+      "category": "temporal",
+      "verdict": "partial",
+      "score": 0.5,
+      "ingest_s": 111.9,
+      "recall_s": 1.4,
+      "ctx_len": 2461,
+      "n_citations": 9,
+      "reason": "The context includes a purchase of a gift for the brother\u2019s graduation on 3/8, but it does not mention the birthday gift for the best friend or its date. So the assistant could identify one date but c"
+    }
+  ]
+}
