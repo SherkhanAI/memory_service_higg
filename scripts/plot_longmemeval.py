@@ -41,14 +41,25 @@ RESULTS: list[dict] = [
         },
     },
     {
-        "label": "v0.5+  N=12 (3/cat) seed=42  [+ROI: gate, prefix, source repair]",
-        "color": "#60a5fa",
+        "label": "v0.5+  N=12 (3/cat) seed=42  [+ROI: gate, prefix, source repair]  <-- submitted",
+        "color": "#2563eb",
         "scores": {
             "knowledge_update": 0.83,
             "multi_session":    0.33,
             "single_session":   0.67,
             "temporal":         1.00,
             "overall":          0.71,
+        },
+    },
+    {
+        "label": "v0.6  N=12 (3/cat) seed=42  [dual-track: prefix in BM25 only]  REJECTED",
+        "color": "#f87171",
+        "scores": {
+            "knowledge_update": 0.83,
+            "multi_session":    0.33,
+            "single_session":   0.33,
+            "temporal":         0.83,
+            "overall":          0.58,
         },
     },
 ]
