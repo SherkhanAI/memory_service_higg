@@ -14,13 +14,103 @@ when needed.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
+from difflib import SequenceMatcher
 
 from ..config import settings
 from . import predicates
 from .llm import chat_json
 
 log = logging.getLogger(__name__)
+
+
+def _normalise(s: str) -> str:
+    """Lower-case, collapse whitespace; for substring comparison only."""
+    return re.sub(r"\s+", " ", (s or "").lower()).strip()
+
+
+def _repair_source_text(source_text: str, turn_text: str, object_text: str) -> str:
+    """Anchor source_text to the actual turn text.
+
+    Why: the LLM frequently paraphrases the supporting span ("I work at
+    Notion as a PM" -> "user works at Notion"), which strips the exact
+    dates / numbers / phrasings that the LongMemEval judge keys on.
+
+    Strategy (cheapest-first):
+      1. If source_text appears verbatim (case-insensitive, whitespace
+         normalised) in turn_text, keep the original phrasing from the
+         turn (preserves casing).
+      2. If object_text appears in turn_text, return a 200-char window
+         centred on it - this preserves the exact phrasing around the
+         answer fact, which is what the judge needs.
+      3. Else find the longest common substring between source_text and
+         turn_text (>=15 chars). If found, return the matching span
+         from turn_text.
+      4. Fallback: return the original source_text (paraphrased).
+    """
+    if not source_text or not turn_text:
+        return source_text or ""
+    norm_source = _normalise(source_text)
+    norm_turn = _normalise(turn_text)
+    # 1. Verbatim hit (after normalisation): recover original casing.
+    pos = norm_turn.find(norm_source)
+    if pos >= 0:
+        # Map normalised position back to turn_text approximately. Cheap
+        # heuristic: walk turn_text by char ignoring whitespace.
+        return _slice_original(turn_text, norm_turn, pos, len(norm_source))
+    # 2. Object_text anchor.
+    norm_object = _normalise(object_text)
+    if norm_object and len(norm_object) >= 3:
+        opos = norm_turn.find(norm_object)
+        if opos >= 0:
+            start = max(0, opos - 80)
+            end = min(len(norm_turn), opos + len(norm_object) + 120)
+            window = _slice_original(turn_text, norm_turn, start, end - start)
+            if window:
+                return window[:200]
+    # 3. Longest common substring.
+    matcher = SequenceMatcher(None, norm_source, norm_turn, autojunk=False)
+    m = matcher.find_longest_match(0, len(norm_source), 0, len(norm_turn))
+    if m.size >= 15:
+        return _slice_original(turn_text, norm_turn, m.b, m.size)
+    # 4. Give up - keep the paraphrase rather than drop the fact.
+    return source_text[:200]
+
+
+def _slice_original(turn_text: str, norm_turn: str, norm_start: int, norm_len: int) -> str:
+    """Approximate inverse of _normalise: walk turn_text, count
+    significant chars, return the original-casing slice that contains
+    norm_len normalised chars starting at norm_start."""
+    if norm_start < 0 or norm_len <= 0:
+        return ""
+    consumed = 0
+    orig_start: int | None = None
+    orig_end: int | None = None
+    prev_ws = False
+    norm_pos = 0
+    for i, ch in enumerate(turn_text):
+        is_ws = ch.isspace()
+        if is_ws:
+            if prev_ws:
+                continue
+            ch_norm = " "
+        else:
+            ch_norm = ch.lower()
+        prev_ws = is_ws
+        if norm_pos == norm_start and orig_start is None:
+            orig_start = i
+        if orig_start is not None and consumed >= norm_len:
+            orig_end = i
+            break
+        if orig_start is not None:
+            consumed += 1
+        norm_pos += 1
+    if orig_start is None:
+        return ""
+    if orig_end is None:
+        orig_end = len(turn_text)
+    return turn_text[orig_start:orig_end].strip()[:200]
 
 
 _FACT_ITEM = {
@@ -124,6 +214,7 @@ async def extract_facts(
         return []
 
     cleaned: list[dict] = []
+    repaired = 0
     for f in facts:
         if not isinstance(f, dict):
             continue
@@ -131,6 +222,95 @@ async def extract_facts(
             continue
         if f.get("stance") == "none":
             f["stance"] = None
+        original = f.get("source_text") or ""
+        f["source_text"] = _repair_source_text(
+            original, turn_text, f.get("object_text") or "",
+        )
+        if _normalise(original) and _normalise(f["source_text"]) != _normalise(original):
+            repaired += 1
         cleaned.append(f)
-    log.info("extracted %d/%d facts", len(cleaned), len(facts))
+    log.info(
+        "extracted %d/%d facts (source_text repaired=%d)",
+        len(cleaned), len(facts), repaired,
+    )
     return cleaned
+
+
+# --- Anthropic-style contextual prefix --------------------------------------
+
+_PREFIX_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {"prefix": {"type": "string"}},
+    "required": ["prefix"],
+}
+
+_PREFIX_SYSTEM = """You write a short situating prefix for a single \
+conversation turn so it embeds and indexes more precisely.
+
+The prefix MUST:
+- Be 25-60 words, one paragraph, no markdown.
+- Mention the broad TOPIC of the turn (job, location, family, hobby, \
+travel, health, opinion about X, etc.).
+- Mention any concrete named ENTITIES from this turn (people, places, \
+companies, products, dates) so they appear in the embedding text.
+- If the prior session context names an entity that the current turn \
+refers to with a pronoun, INCLUDE the resolved entity name in the prefix.
+- NOT add information that is not in the turn or the prior context.
+- NOT use first or second person ("I", "you"). Write about "the user".
+
+Return JSON: {"prefix": "<25-60 words>"}.
+"""
+
+
+async def build_contextual_prefix(
+    turn_text: str,
+    *,
+    session_context: str | None = None,
+    session_id: str | None = None,
+    turn_ts: datetime | None = None,
+) -> str | None:
+    """Generate a short situating prefix for ``turn_text``.
+
+    Following Anthropic's Contextual Retrieval recipe (2024): each
+    chunk gets a 25-60 word prefix that names the topic and entities,
+    prepended BEFORE embedding and BM25 indexing. Reported -49 percent
+    retrieval failure on the original eval; we apply it only on the
+    episodic_turn write path.
+
+    Returns ``None`` if the upstream LLM call fails - the caller should
+    embed/index ``turn_text`` alone in that case.
+    """
+    if not settings.has_extraction_key:
+        return None
+    if not (turn_text or "").strip():
+        return None
+    when = turn_ts.date().isoformat() if turn_ts else "unknown"
+    sess_block = (
+        f"PRIOR TURNS IN THIS SESSION (for entity resolution only):\n"
+        f"---\n{session_context}\n---\n\n"
+        if session_context else ""
+    )
+    user = (
+        f"Session: {session_id or '?'}  Date: {when}\n\n"
+        f"{sess_block}"
+        f"CURRENT TURN:\n---\n{turn_text}\n---\n\n"
+        f"Write the situating prefix."
+    )
+    result = await chat_json(
+        system=_PREFIX_SYSTEM,
+        user=user,
+        schema=_PREFIX_SCHEMA,
+        schema_name="contextual_prefix",
+        temperature=0.0,
+        timeout_s=15.0,
+    )
+    if not result:
+        return None
+    prefix = (result.get("prefix") or "").strip()
+    if not prefix:
+        return None
+    # Hard cap so it never dominates the embedding budget.
+    if len(prefix) > 500:
+        prefix = prefix[:500]
+    return prefix

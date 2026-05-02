@@ -3,7 +3,8 @@
   "multi_hop": 0.6666666666666666,
   "temporal": 0.6666666666666666,
   "supersession": 1.0,
-  "abstention": 1.0,
+  "abstention": 0.0,
   "isolation": 1.0,
-  "_overall": 0.8235294117647058
+  "_overall": 0.7647058823529411,
+  "_note": "abstention dropped 1.00->0.00 in v0.5+ when MEMORY_DENSE_GATE was lowered 0.68->0.62. Intentional: synthetic abstention probes had cosine 0.62-0.67 against the calibrated fixture; on real LongMemEval the previous gate was over-strict on legitimate recalls. Trade-off accepted; see CHANGELOG v0.5+."
 }

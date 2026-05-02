@@ -11,7 +11,7 @@ from ..config import settings
 from ..db import pool
 from ..schemas import TurnIn, TurnOut
 from ..services.embedding import embed_one
-from ..services.extraction import extract_facts
+from ..services.extraction import build_contextual_prefix, extract_facts
 from ..services.reconciliation import reconcile_and_write
 
 router = APIRouter()
@@ -28,24 +28,27 @@ def _flatten_messages(turn: TurnIn) -> str:
     return "\n".join(parts)
 
 
-async def _recent_session_text(session_id: str, exclude_id: str, limit: int = 2) -> str | None:
-    """Fetch up to N most recent prior turns in this session for coreference context."""
+async def _recent_session_text_pre(session_id: str, limit: int = 2) -> str | None:
+    """Fetch up to N most recent prior turns in this session.
+
+    Called BEFORE the current turn is inserted, so no exclusion needed.
+    Used both for the contextual prefix and for extraction coreference.
+    """
     async with pool().connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
                 SELECT raw_text
                 FROM episodic_turn
-                WHERE session_id = %s AND id <> %s::uuid
+                WHERE session_id = %s
                 ORDER BY ts DESC, created_at DESC
                 LIMIT %s
                 """,
-                (session_id, exclude_id, limit),
+                (session_id, limit),
             )
             rows = await cur.fetchall()
     if not rows:
         return None
-    # Reverse to chronological
     return "\n\n".join(r[0] for r in reversed(rows) if r[0])
 
 
@@ -60,25 +63,50 @@ async def post_turn(turn: TurnIn) -> TurnOut:
     messages_json = json.dumps([m.model_dump() for m in turn.messages])
     metadata_json = json.dumps(turn.metadata)
 
-    # 1. Embed the raw turn (synchronous — /turns blocks).
-    embedding = await embed_one(raw_text)
+    # 1. Build an Anthropic-style contextual prefix using prior turns of
+    #    this session. The prefix is prepended to raw_text for embedding
+    #    and BM25 indexing (so retrieval keys on it), but raw_text stays
+    #    clean for display in /recall context. Best-effort: failure here
+    #    falls back to the bare raw_text.
+    prior_session_text = (
+        await _recent_session_text_pre(turn.session_id, limit=2)
+        if turn.user_id else None
+    )
+    context_prefix: str | None = None
+    if turn.user_id and settings.has_extraction_key:
+        try:
+            context_prefix = await build_contextual_prefix(
+                raw_text,
+                session_context=prior_session_text,
+                session_id=turn.session_id,
+                turn_ts=turn.timestamp,
+            )
+        except Exception as e:  # pragma: no cover
+            log.warning("contextual prefix failed: %s", e)
+            context_prefix = None
+
+    # 2. Embed the (prefix + raw) text. /turns blocks until done per spec.
+    text_for_index = (
+        f"{context_prefix}\n\n{raw_text}" if context_prefix else raw_text
+    )
+    embedding = await embed_one(text_for_index)
     if embedding is not None and len(embedding) != settings.embedding_dim:
         log.warning(
-            "embedding dim mismatch: got %d, expected %d — dropping",
+            "embedding dim mismatch: got %d, expected %d - dropping",
             len(embedding), settings.embedding_dim,
         )
         embedding = None
 
-    # 2. Insert episodic_turn first so source_turn_id FK is satisfied.
+    # 3. Insert episodic_turn first so source_turn_id FK is satisfied.
     async with pool().connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
                 INSERT INTO episodic_turn
                     (session_id, user_id, messages, ts, metadata,
-                     raw_text, embedding, tsv)
+                     raw_text, context_prefix, embedding, tsv)
                 VALUES (%s, %s, %s::jsonb, %s, %s::jsonb,
-                        %s, %s, to_tsvector('english', %s))
+                        %s, %s, %s, to_tsvector('english', %s))
                 RETURNING id
                 """,
                 (
@@ -88,23 +116,24 @@ async def post_turn(turn: TurnIn) -> TurnOut:
                     turn.timestamp,
                     metadata_json,
                     raw_text,
+                    context_prefix,
                     Vector(embedding) if embedding is not None else None,
-                    raw_text,
+                    text_for_index,
                 ),
             )
             row = await cur.fetchone()
             await conn.commit()
     turn_id = str(row[0])
 
-    # 3. Extract facts and reconcile (synchronous per ТЗ).
-    #    Failures here MUST NOT crash /turns — log and continue.
+    # 4. Extract facts and reconcile (synchronous per ТЗ).
+    #    Failures here MUST NOT crash /turns - log and continue.
     extracted = 0
     counts: dict[str, int] = {}
     if turn.user_id and settings.has_extraction_key:
         try:
-            session_context = await _recent_session_text(turn.session_id, exclude_id=turn_id, limit=2)
             facts = await extract_facts(
-                raw_text, turn.timestamp, session_context=session_context,
+                raw_text, turn.timestamp,
+                session_context=prior_session_text,
             )
             extracted = len(facts)
             counts = await reconcile_and_write(

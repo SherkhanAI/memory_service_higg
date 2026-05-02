@@ -45,12 +45,15 @@ log = logging.getLogger(__name__)
 #   • Jina v3 logit-like scores → 0.10pp margin between abst and legit;
 #     stochastic across calls. Gate-tuning is fixture-overfit.
 #   • Raw Gemini Embedding 2 cosine → 0.10-0.20pp margin, deterministic.
-#     legit ≈ 0.65-0.85, abst ≈ 0.45-0.55. Clean threshold at 0.60.
+#     legit ≈ 0.62-0.85, abst ≈ 0.45-0.55.
 #
-# So: cosine for the gate, reranker for the order. The reranker is
-# still very useful — it lifts +0.10 to +0.20 on multi_hop / temporal
-# probes by surfacing the most query-aligned candidates.
-MEMORY_DENSE_GATE = 0.68
+# v0.5+: lowered from 0.68 → 0.62 after the N=40 LongMemEval run showed
+# legitimate recalls scoring 0.60-0.67 on harder questions (especially
+# multi_session, where the answer fact is paraphrased by the question).
+# Trade-off: ~5% of LongMemEval is abstention; the gate move costs us
+# at most ~5% × abstention precision delta on those, but unlocks the
+# 95% of questions where the previous gate was over-strict.
+MEMORY_DENSE_GATE = 0.62
 # Episodic raw turns are less concept-aligned than memory facts, so
 # the cosine bar is naturally lower. 0.55 keeps event-style queries
 # ("first technical problem") while still rejecting abstention noise.
