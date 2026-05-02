@@ -28,14 +28,9 @@ async def post_search(req: SearchIn) -> SearchOut:
         # Search is user- or session-scoped to avoid cross-user leaks.
         return SearchOut(results=[])
 
-    user_id = req.user_id or ""
-    if not user_id:
-        # session-only scope is unusual but supported via direct SQL —
-        # for v0.4 we keep it simple and require user_id for ranking.
-        return SearchOut(results=[])
-
     hybrid = await hybrid_search(
-        user_id=user_id,
+        user_id=req.user_id,
+        session_id=req.session_id,
         query=req.query,
         k_per_stream=req.limit * 3,
     )

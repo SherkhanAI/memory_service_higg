@@ -160,39 +160,62 @@ async def _memory_sparse(user_id: str, query: str, k: int) -> list[tuple]:
             return await cur.fetchall()
 
 
-async def _episodic_dense(user_id: str, q_vec: Vector, k: int) -> list[tuple]:
+async def _episodic_dense(
+    user_id: str | None,
+    q_vec: Vector,
+    k: int,
+    session_id: str | None = None,
+) -> list[tuple]:
+    where = []
+    args: list[Any] = [q_vec]
+    if user_id:
+        where.append("user_id = %s")
+        args.append(user_id)
+    if session_id:
+        where.append("session_id = %s")
+        args.append(session_id)
+    where.append("embedding IS NOT NULL")
+    sql = f"""
+        SELECT id::text, raw_text, ts, session_id,
+               1 - (embedding <=> %s) AS score
+        FROM episodic_turn
+        WHERE {' AND '.join(where)}
+        ORDER BY embedding <=> %s
+        LIMIT %s
+    """
+    args.extend([q_vec, k])
     async with pool().connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id::text, raw_text, ts, session_id,
-                       1 - (embedding <=> %s) AS score
-                FROM episodic_turn
-                WHERE user_id = %s
-                  AND embedding IS NOT NULL
-                ORDER BY embedding <=> %s
-                LIMIT %s
-                """,
-                (q_vec, user_id, q_vec, k),
-            )
+            await cur.execute(sql, tuple(args))
             return await cur.fetchall()
 
 
-async def _episodic_sparse(user_id: str, query: str, k: int) -> list[tuple]:
+async def _episodic_sparse(
+    user_id: str | None,
+    query: str,
+    k: int,
+    session_id: str | None = None,
+) -> list[tuple]:
+    where = ["tsv @@ plainto_tsquery('english', %s)"]
+    args: list[Any] = [query, query]
+    if user_id:
+        where.append("user_id = %s")
+        args.append(user_id)
+    if session_id:
+        where.append("session_id = %s")
+        args.append(session_id)
+    sql = f"""
+        SELECT id::text, raw_text, ts, session_id,
+               ts_rank_cd(tsv, plainto_tsquery('english', %s)) AS score
+        FROM episodic_turn
+        WHERE {' AND '.join(where)}
+        ORDER BY score DESC
+        LIMIT %s
+    """
+    args.append(k)
     async with pool().connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id::text, raw_text, ts, session_id,
-                       ts_rank_cd(tsv, plainto_tsquery('english', %s)) AS score
-                FROM episodic_turn
-                WHERE user_id = %s
-                  AND tsv @@ plainto_tsquery('english', %s)
-                ORDER BY score DESC
-                LIMIT %s
-                """,
-                (query, user_id, query, k),
-            )
+            await cur.execute(sql, tuple(args))
             return await cur.fetchall()
 
 
@@ -238,34 +261,52 @@ def _candidate_from_episodic(row: tuple) -> Candidate:
 
 async def hybrid_search(
     *,
-    user_id: str,
+    user_id: str | None,
     query: str,
     k_per_stream: int = _K_PER_STREAM,
+    session_id: str | None = None,
 ) -> HybridResult:
-    """Run all four streams in parallel, return RRF-fused candidates +
+    """Run hybrid streams in parallel, return RRF-fused candidates +
     per-stream top-1 cosine scores (used for the abstention gate).
+
+    Scope rules:
+      - user_id only: all four streams (memory + episodic) over user
+      - user_id + session_id: same, but episodic restricted to session
+      - session_id only: episodic-only (memory facts are user-scoped)
+      - neither: empty
     """
-    if not query.strip() or not user_id:
+    if not query.strip() or (not user_id and not session_id):
         return HybridResult(candidates=[])
 
     q_emb = await embed_one(query)
     if q_emb is None:
-        # No embedding — sparse-only fallback (no abstention signal).
-        sparse_mem, sparse_ep = await asyncio.gather(
-            _memory_sparse(user_id, query, k_per_stream),
-            _episodic_sparse(user_id, query, k_per_stream),
+        # No embedding - sparse-only fallback (no abstention signal).
+        sparse_mem = (
+            await _memory_sparse(user_id, query, k_per_stream)
+            if user_id else []
+        )
+        sparse_ep = await _episodic_sparse(
+            user_id, query, k_per_stream, session_id=session_id,
         )
         return HybridResult(
             candidates=_fuse([], sparse_mem, [], sparse_ep),
         )
 
     q_vec = Vector(q_emb)
-    dense_mem, sparse_mem, dense_ep, sparse_ep = await asyncio.gather(
-        _memory_dense(user_id, q_vec, k_per_stream),
-        _memory_sparse(user_id, query, k_per_stream),
-        _episodic_dense(user_id, q_vec, k_per_stream),
-        _episodic_sparse(user_id, query, k_per_stream),
-    )
+    if user_id:
+        dense_mem, sparse_mem, dense_ep, sparse_ep = await asyncio.gather(
+            _memory_dense(user_id, q_vec, k_per_stream),
+            _memory_sparse(user_id, query, k_per_stream),
+            _episodic_dense(user_id, q_vec, k_per_stream, session_id=session_id),
+            _episodic_sparse(user_id, query, k_per_stream, session_id=session_id),
+        )
+    else:
+        # session_id only: skip user-scoped memory streams
+        dense_mem, sparse_mem = [], []
+        dense_ep, sparse_ep = await asyncio.gather(
+            _episodic_dense(None, q_vec, k_per_stream, session_id=session_id),
+            _episodic_sparse(None, query, k_per_stream, session_id=session_id),
+        )
     mem_top1 = float(dense_mem[0][-1]) if dense_mem else 0.0
     ep_top1 = float(dense_ep[0][-1]) if dense_ep else 0.0
     return HybridResult(
