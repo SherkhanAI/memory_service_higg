@@ -170,14 +170,22 @@ gpt-5.4-mini лучший trade-off:
 
 **Cross-encoder реранкер** смотрит на (query, document) совместно,
 а не сравнивает эмбеддинги — это даёт +10-20pp точности на топ-1
-по сравнению с чистым cosine. Сравнение на BEIR:
+по сравнению с чистым cosine.
 
-| Реранкер | BEIR nDCG@10 avg | Тип | API |
-|---|---|---|---|
-| **Jina Reranker v3** | **~62** | listwise late-interaction | `api.jina.ai/v1/rerank` |
-| Cohere rerank-4-fast | ~60 | classical cross-encoder | OpenRouter `/rerank` |
-| BGE-reranker-v2-m3 | ~58 | classical cross-encoder | self-host |
-| Qwen3-Reranker-0.6B | ~57 | classical cross-encoder | self-host |
+В MTEB v2 leaderboard на под-задаче **Reranking** Jina v3 берёт
+**67.84** — выше большинства классических кросс-энкодеров и
+сравним с топовыми эмбеддерами по этому конкретному метрику:
+
+![Jina Reranker v3 в MTEB Reranking](docs/jina_v3_mteb.png)
+
+Сравнение реранкеров на BEIR (отдельный бенчмарк по retrieval):
+
+| Реранкер | BEIR nDCG@10 avg | MTEB Reranking | Тип | API |
+|---|---|---|---|---|
+| **Jina Reranker v3** | **~62** | **67.84** | listwise late-interaction | `api.jina.ai/v1/rerank` |
+| Cohere rerank-4-fast | ~60 | — | classical cross-encoder | OpenRouter `/rerank` |
+| BGE-reranker-v2-m3 | ~58 | ~64 | classical cross-encoder | self-host |
+| Qwen3-Reranker-0.6B | ~57 | ~63 | classical cross-encoder | self-host |
 
 Jina v3 — listwise: смотрит сразу на весь набор кандидатов, что особенно
 помогает на запросах с разноуровневой релевантностью. Trade-off — на
@@ -439,14 +447,21 @@ MEMORY_SERVICE_URL=http://my-host:8080 pytest
 LLM-as-judge на 3 класса (yes/partial/no). Все числа — реально
 прогнаны, baselines в `tests/fixtures/`.
 
+![LongMemEval по категориям и версиям](docs/longmemeval_results.png)
+
 | Версия | N | seed | overall | Категории |
 |---|---|---|---|---|
 | v0.4.5 | 12 (3/cat) | 42 | **0.75** | knowledge_update 1.00, multi_session 0.67, single_session 0.67, temporal 0.67 |
-| v0.5 (без ROI) | 40 (10/cat) | 42 | **0.61** | KU 0.80, MS 0.55, SS 0.50, T 0.56 (с 62× 402-ошибками к концу) |
-| v0.5+ (с ROI) | _в процессе_ | _в процессе_ | _ждём_ | _A/B vs v0.4.5 baseline_ |
+| v0.5 (без ROI) | 40 (10/cat) | 42 | **0.61** | KU 0.80, MS 0.55, SS 0.50, T 0.56 (с 62× 402-ошибками к концу прогона) |
+| v0.5+ (с ROI) | 12 (3/cat) | 42 | _в процессе_ | _A/B vs v0.4.5 baseline_ |
 
 Синтетический fixture (17 probes на 6 категорий): **0.76 overall**
 после v0.5+ изменений.
+
+График перерисовывается из CHANGELOG-данных:
+```bash
+python scripts/plot_longmemeval.py
+```
 
 ### Честные оговорки (важно)
 
