@@ -137,6 +137,140 @@ See `plan.md` for the architecture diagram and the rationale behind each
 choice (storage, embedding, reranker, supersession, contradiction
 handling).
 
+## Backing store choice
+
+**Postgres 16 + pgvector + tsvector**, single engine. Reasons:
+
+- ACID transactions are load-bearing for bi-temporal supersession - a
+  conflicting fact has to invalidate the old row and link the new one
+  atomically, otherwise `/users/.../memories` returns inconsistent state
+  during the gap.
+- pgvector handles cosine search at our scale (10k-1M memories per user
+  is well under HNSW's saturation point).
+- tsvector + `ts_rank_cd` is a serviceable BM25-flavoured sparse search
+  with no extra deployment surface.
+- One container, one volume, one connection pool. No two-phase commit
+  between a vector store and a relational store.
+
+Schema: `episodic_turn` (append-only raw turns + embedding + tsv) and
+`memory` (bi-temporal: `t_valid`, `t_invalid`, `t_created`,
+`t_expired`, `superseded_by` self-FK, plus `mention_count` for
+salience). Migrations apply at startup from `src/migrations/*.sql`.
+
+## Extraction pipeline
+
+`POST /turns` runs three stages synchronously inside the 60-second
+budget:
+
+1. **Embed** the raw turn text once (Gemini Embedding 2 via OpenRouter,
+   1536d MRL-truncated and L2-renormalised).
+2. **Persist** the episodic turn (raw text + embedding + tsv).
+3. **Extract** structured facts with a single strict-JSON-schema call
+   to `openai/gpt-5.4-mini`. Coreference is handled by passing the last
+   2 prior turns of the same session as context. Each fact is `{type,
+   predicate, object_text, stance, confidence, is_implicit, source_text}`
+   keyed by a canonical predicate enum (~30 predicates: `name`,
+   `employer`, `lives_in`, `pet`, `preference.*`, `event.*`, ...).
+4. **Reconcile** each new fact against existing memories using a Mem0-style
+   4-action decision (`ADD`, `UPDATE`, `SUPERSEDE`, `NOOP`) before
+   writing - exclusive predicates supersede, multi-valued predicates
+   accumulate, duplicates bump `mention_count`.
+
+What we extract well: names, employer/role, location, pets, preferences,
+opinions with stance, life events with date qualifiers.
+
+What we miss: multi-hop reasoning across entities, fine-grained temporal
+facts when the LLM paraphrases away the date, anything outside the
+~30-predicate vocabulary (it falls into `other:*` and gets scored
+purely on embedding match, no canonical reasoning).
+
+## Recall strategy
+
+`POST /recall` runs a hybrid retrieval -> rerank -> tiered assembly
+pipeline:
+
+1. **Hybrid retrieve** in 4 parallel SQL streams (memory dense, memory
+   sparse, episodic dense, episodic sparse), fused with Reciprocal Rank
+   Fusion (RRF, k=60). Sparse and dense are scale-incompatible, so
+   rank-based fusion is the safe default.
+2. **Rerank** the top-30 candidates with Jina Reranker v3. Memory facts
+   are verbalised into natural-language sentences before they hit the
+   cross-encoder ("employer: Notion" -> "The user currently works at
+   Notion."); cross-encoders are trained on sentences, not key:value
+   triples, and the verbalisation step alone moved a critical probe
+   from ranked-second to ranked-first.
+3. **Fetch stable identity facts** independently (predicate-filtered SQL,
+   no retrieval) - these are the always-on user profile.
+4. **Fetch the last few turns** of the current session for follow-up
+   context, scoped by both `session_id` and `user_id`.
+5. **Assemble** under `max_tokens` with three quotas: stable identity
+   ~30%, query-relevant ~50%, recent context ~20% (overflow re-allocated
+   to the next section). The order matches the priority defended below.
+6. **Abstention gate**: if max(memory_dense_top1, episodic_dense_top1)
+   raw cosine is below `MEMORY_DENSE_GATE` (0.68), return an empty
+   context. The reranker is used for ordering, not gating - its
+   logit-like scores are too compressed to threshold cleanly on
+   personal-fact corpora.
+
+**Priority under budget tightness**: stable identity facts win first,
+relevant memories second, recent turns last. Reasoning: identity context
+("works at Notion, allergic to shellfish") is needed for *every* turn,
+even when the query has no clear retrieval target. Dropping it to make
+room for one more recent turn produces a worse downstream answer.
+
+## Fact evolution
+
+Bi-temporal model with explicit supersession (Zep/Graphiti-flavoured):
+
+- `t_valid` is when the fact became true in the world ("I just started
+  at Notion" stamped from the turn timestamp).
+- `t_invalid` is when it stopped being true (set when superseded).
+- `t_created` / `t_expired` track the database-write time independently.
+- `superseded_by` is a self-FK to the row that replaced this one.
+
+Reconciliation runs an LLM-decided 4-action choice (Mem0):
+
+| Action | When | Effect |
+|---|---|---|
+| `ADD` | New predicate or non-conflicting multi-valued | Insert active row |
+| `UPDATE` | Same predicate, slightly different wording | Insert + invalidate predecessor, link via `superseded_by` |
+| `SUPERSEDE` | Exclusive predicate, conflicting object | Same as UPDATE; semantic distinction |
+| `NOOP` | Duplicate / already known | Bump `mention_count` only |
+
+`/recall` filters `t_invalid IS NULL` so superseded rows are invisible
+to the agent but visible to the inspector at `/users/{user_id}/memories`.
+
+Opinion arcs (the harder variant in task.md): handled as repeated
+`opinion_about` facts with explicit `stance` field (`positive` /
+`negative` / `mixed` / `none`) and `t_valid` timestamps. The current
+implementation surfaces the most recent stance in `/recall`; building a
+trajectory summary ("started positive, drifted to mixed") is an
+extraction-time task that's out of scope for this build.
+
+## Tradeoffs
+
+Optimised for:
+
+- Honest measurement on a public benchmark (LongMemEval-S cleaned)
+  rather than a tuned-to-impress synthetic number.
+- Zero infrastructure surface beyond Postgres + the app container.
+- Synchronous `/turns` so eval probes never observe stale state.
+- Provider-agnostic routing (OpenRouter unified gateway with
+  per-layer overrides).
+
+Gave up:
+
+- Throughput per `/turns` (one extraction LLM call + 4 SQL writes per
+  turn -> ~2-4 s latency). Acceptable inside the 60 s budget; would
+  not scale to thousands of writes per second without batching.
+- Multi-hop reasoning across entities (no graph traversal step). All
+  retrieval is single-hop hybrid over flat memories.
+- True opinion-arc summarisation. Stances are stored, but not
+  trajectory-summarised at recall time.
+- Self-host with no API keys (provider keys are the default; the
+  README documents how to point at a local TEI/vLLM endpoint, but
+  there is no `docker-compose.gpu.yml` shipped).
+
 ## Endpoints
 
 All endpoints accept an optional `Authorization: Bearer <token>` header.
