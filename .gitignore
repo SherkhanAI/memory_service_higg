@@ -8,6 +8,7 @@ __pycache__/
 *.log
 .idea/
 .vscode/
+.claude/
 
 # LongMemEval-S cleaned cache (265 MB, downloaded by src/eval/loader.py)
 fixtures/longmemeval/
