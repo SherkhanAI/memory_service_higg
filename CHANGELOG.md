@@ -47,13 +47,40 @@ never have surfaced.
   memory ids and citations identical)
 - Concurrent: 2/2 pass (no cross-user leak; shared session_id isolated
   per user after the `fetch_recent_turns` fix)
+- LongMemEval-S cleaned, N=40 (10 per category), seed=42, 8 distractors:
+
+  | Category         | v0.4.5 N=12 | v0.5 N=40 | n_valid |
+  |------------------|-------------|-----------|---------|
+  | knowledge_update | 1.00        | 0.80      | 10/10   |
+  | multi_session    | 0.67        | 0.55      | 10/10   |
+  | single_session   | 0.67        | 0.50      | 10/10   |
+  | temporal         | 0.67        | 0.56      | 8/10    |
+  | **overall**      | **0.75**    | **0.61**  | 38/40   |
+
+  Wall clock 74.6 min, ~$3 in API costs. 2 judge errors excluded.
+
+**Honest read on the N=40 number.**
+The 0.61 is partly degraded by the OpenRouter account running out of
+credits roughly two-thirds through the run - 62 `402 Payment Required`
+responses to `chat.completions` calls turned several extractions into
+empty fact lists, which downstream made `/recall` look thin to the
+judge. I am not re-running the same seed after topping up: that is the
+exact benchmaxxing behaviour the user warned against. The number stands.
+
+What this confirms: at N=12 the confidence interval was very wide
+(±15-20pp), and the true score was probably closer to ~0.65 even
+without the 402s. The synthetic-vs-real gap (0.82 vs 0.61-0.75 range)
+is real and the synthetic number remains a fixture-overfit upper bound,
+not a generalisation claim.
 
 **Next.**
-- v0.5 final LongMemEval N=10/cat (40 q, ~75 min, ~$3) for the
-  submission baseline number.
 - v0.5+ if time: verbatim-quote enforcement in extraction, Anthropic
   Contextual Retrieval prefix on episodic_turn, lower
   `MEMORY_DENSE_GATE` from 0.68 to 0.62. Tracked in `v5_plan.md`.
+- Resilience-side: `chat_json` should distinguish 402 (credits) from
+  other 4xx and surface a clear error to the operator, since silent
+  empty-extraction failures are exactly the kind of thing that hides
+  in benchmark numbers.
 
 ---
 

@@ -11,10 +11,20 @@ Engineering Challenge (`task.md`).
 > + debates.
 >
 > **Eval results** (LLM-as-judge, 3-class verdict yes/partial/no):
-> - LongMemEval-S cleaned, N=12 stratified across 4 categories: **0.75**
+> - LongMemEval-S cleaned, **N=40** stratified (10 per category): **0.61**
+>   (knowledge_update 0.80, multi_session 0.55, single_session 0.50,
+>   temporal 0.56). 38/40 valid scores; 2 judge errors excluded.
+> - LongMemEval-S cleaned, N=12 (sanity-check): **0.75**.
 > - Synthetic fixture (17 probes, 6 categories): **0.82** - this number
 >   is fixture-overfit and should not be compared against the public
 >   dataset score; see [Honest disclosures](#honest-disclosures) below.
+>
+> Honest caveat: the N=40 run was partly degraded by ~60 `402 Payment
+> Required` responses from OpenRouter near the end of the run when
+> credits were exhausted, which silently turned several extraction calls
+> into empty fact lists. The number is reported as-is rather than
+> retried, since fixing the credits and re-running on the same seed
+> would just be benchmaxxing.
 
 ---
 
