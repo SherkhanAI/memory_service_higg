@@ -127,21 +127,35 @@ async def fetch_stable_facts(user_id: str) -> list[dict[str, Any]]:
     ]
 
 
-async def fetch_recent_turns(session_id: str | None, limit: int = _RECENT_TURN_LIMIT) -> list[tuple]:
+async def fetch_recent_turns(
+    session_id: str | None,
+    limit: int = _RECENT_TURN_LIMIT,
+    user_id: str | None = None,
+) -> list[tuple]:
+    """Pull last ``limit`` turns of a session in chronological order.
+
+    Always pass ``user_id`` when available - session_id is not globally
+    unique (two users can pick the same string), so without the user
+    filter we leak turns across users.
+    """
     if not session_id:
         return []
+    where = ["session_id = %s"]
+    args: list[Any] = [session_id]
+    if user_id:
+        where.append("user_id = %s")
+        args.append(user_id)
+    args.append(limit)
+    sql = f"""
+        SELECT id::text, raw_text, ts
+        FROM episodic_turn
+        WHERE {' AND '.join(where)}
+        ORDER BY ts DESC, created_at DESC
+        LIMIT %s
+    """
     async with pool().connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                SELECT id::text, raw_text, ts
-                FROM episodic_turn
-                WHERE session_id = %s
-                ORDER BY ts DESC, created_at DESC
-                LIMIT %s
-                """,
-                (session_id, limit),
-            )
+            await cur.execute(sql, tuple(args))
             rows = await cur.fetchall()
     return list(reversed(rows))  # chronological order
 

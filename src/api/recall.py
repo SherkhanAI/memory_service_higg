@@ -53,7 +53,9 @@ async def post_recall(req: RecallIn) -> RecallOut:
     )
 
     stable = await fetch_stable_facts(req.user_id)
-    recent = await fetch_recent_turns(req.session_id, limit=4)
+    recent = await fetch_recent_turns(
+        req.session_id, limit=4, user_id=req.user_id,
+    )
 
     body, citations = assemble(
         stable_facts=stable,
