@@ -5,10 +5,16 @@ extracts structured facts (v0.3+), and answers recall queries via a
 hybrid retrieval pipeline (v0.4+). Designed against the Higgsfield AI
 Engineering Challenge (`task.md`).
 
-> **Status:** v0.2 — Gemini Embedding via OpenRouter + vanilla-cosine
-> baseline. Self-eval overall **0.71**. Extraction and reranking land in
-> v0.3/v0.4. See `CHANGELOG.md` for iteration history and `plan.md` for
-> the full design + debates.
+> **Status:** v0.5 - submission ready. Hybrid retrieval (BM25 + vector
+> + RRF) + Jina Reranker v3 + bi-temporal supersession. See
+> `CHANGELOG.md` for the full iteration history and `plan.md` for design
+> + debates.
+>
+> **Eval results** (LLM-as-judge, 3-class verdict yes/partial/no):
+> - LongMemEval-S cleaned, N=12 stratified across 4 categories: **0.75**
+> - Synthetic fixture (17 probes, 6 categories): **0.82** - this number
+>   is fixture-overfit and should not be compared against the public
+>   dataset score; see [Honest disclosures](#honest-disclosures) below.
 
 ---
 
@@ -26,25 +32,36 @@ The service binds to **port 8080** and persists to the named Docker
 volume `memory-db-data`. `docker compose down && docker compose up -d`
 preserves all data.
 
-To run the contract tests and self-eval against the running service:
+To run the test suites against the running service:
 
 ```bash
 pip install -r requirements.txt
 pytest -m contract                  # 11 shape & resilience tests
-pytest -m memeval -s                # recall-quality fixture (needs API key)
+pytest -m persistence               # restart-survival (needs docker CLI)
+pytest -m concurrent                # cross-user / cross-session isolation
+pytest -m memeval -s                # synthetic recall-quality fixture
+pytest -m longmemeval -s            # real LongMemEval-S, ~$1, ~25 min
+```
+
+Smoke test (the exact ТЗ §7 example):
+
+```bash
+bash scripts/smoke.sh
 ```
 
 Override the target with `MEMORY_SERVICE_URL=http://...:8080 pytest`.
 
 ## Stack
 
-Default: **OpenRouter** as the unified gateway — one key, three models.
+Default: **OpenRouter** as the unified gateway for embedding + extraction
+(one key, two models). The reranker uses Jina's direct API since
+OpenRouter does not currently expose Jina v3.
 
-| Layer | Default model (via OpenRouter) | Endpoint |
+| Layer | Default model | Endpoint |
 |---|---|---|
-| Embedding | `google/gemini-embedding-2-preview` (1536d, MRL truncate) | `POST /api/v1/embeddings` |
-| Extraction LLM | `openai/gpt-5.4-mini` (strict JSON Schema, v0.3+) | `POST /api/v1/chat/completions` |
-| Reranker | `cohere/rerank-4-fast` (v0.4+) | `POST /api/v1/rerank` |
+| Embedding | `google/gemini-embedding-2-preview` via OpenRouter (1536d, MRL truncate) | `POST /api/v1/embeddings` |
+| Extraction LLM | `openai/gpt-5.4-mini` via OpenRouter (strict JSON Schema, v0.3+) | `POST /api/v1/chat/completions` |
+| Reranker | `jina-reranker-v3` direct (v0.4+, BEIR nDCG-10 ~62) | `POST https://api.jina.ai/v1/rerank` |
 
 | Layer | Choice | Notes |
 |---|---|---|
@@ -175,6 +192,35 @@ Hard delete. Used by the eval between scenarios. Returns 204.
 | Restart | Named volume preserves all data. |
 | Concurrent sessions, same user | Memories are user-scoped, not session-scoped (v0.3+ documented). Sessions don't bleed across users. |
 
+## Honest disclosures
+
+Submitting a memory system that benchmaxxes its own fixture is easy and
+worthless. A few things to keep in mind when reading the numbers:
+
+- **Synthetic fixture (0.82) is fixture-overfit.** All thresholds in
+  `src/services/assembler.py` (`MEMORY_DENSE_GATE=0.68`,
+  `EPISODIC_DENSE_GATE=0.55`) were tuned against my own probes in
+  `fixtures/probes.json`. The synthetic number is a sanity check on the
+  pipeline, not a generalisation claim.
+- **Real LongMemEval-S (0.75) is the number that matters.** That is
+  scored with an independent LLM-judge against the public dataset
+  (`xiaowu0162/longmemeval-cleaned`) over 12 stratified questions
+  (knowledge_update, multi_session, single_session, temporal). Wall clock
+  ~25 min, cost ~$1. Confidence interval at N=12 is wide (~±15pp); the
+  v0.5 submission baseline runs at N=40.
+- **"Multi-hop" probes in the synthetic fixture are not real multi-hop.**
+  They are single-hop multi-fact (one retrieval surfacing several facts
+  about one entity). True multi-hop reasoning across an entity graph is
+  out of scope for this build.
+- **Abstention is measured only on the synthetic fixture.** The
+  LongMemEval-cleaned subset has very few abstention questions, so the
+  abstention metric is mostly diagnostic.
+- **The cosine gate is what actually drives abstention.** The Jina v3
+  reranker is used for ordering only - its logit-like scores are too
+  compressed on personal-fact corpora to make a clean gate. Raw Gemini
+  Embedding 2 cosine top-1 has a cleaner separation between legitimate
+  recalls (≥0.65) and abstention queries (≤0.55).
+
 ## Repo layout
 
 ```
@@ -196,13 +242,20 @@ Hard delete. Used by the eval between scenarios. Returns 204.
 │   ├── services/       ← embedding, openrouter, tokens (extraction
 │   │                     and reranker land in v0.3/v0.4)
 │   └── migrations/     ← *.sql, applied at startup
+├── scripts/
+│   └── smoke.sh             ← exact task.md §7 smoke test
 ├── tests/
 │   ├── conftest.py
 │   ├── test_contract.py     ← 11 shape & resilience tests
-│   ├── test_memeval.py      ← LongMemEval-shaped self-eval
+│   ├── test_persistence.py  ← restart-survival (docker compose stop+start)
+│   ├── test_concurrent.py   ← cross-user / cross-session isolation
+│   ├── test_memeval.py      ← synthetic recall-quality fixture
+│   ├── test_longmemeval.py  ← real LongMemEval-S cleaned eval
 │   └── fixtures/
-│       └── memeval_baseline.json
+│       ├── memeval_baseline.json
+│       └── longmemeval_baseline.json
 └── fixtures/
     ├── conversations.json   ← 2 users, 9 sessions, supersession arc
-    └── probes.json          ← 16 probes × 6 categories
+    ├── probes.json          ← 17 probes × 6 categories
+    └── longmemeval/         ← downloaded by src/eval/loader.py (gitignored)
 ```

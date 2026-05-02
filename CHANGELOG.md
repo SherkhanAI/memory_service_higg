@@ -5,6 +5,58 @@ the self-eval said, what's next.
 
 ---
 
+## v0.5 - submission readiness
+
+**What changed.**
+- `tests/test_persistence.py`: restart-survival test that bounces the app
+  container with `docker compose stop app && start app` and asserts the
+  memory IDs and recall citations are byte-identical before/after.
+  Skipped when `docker` is not in PATH.
+- `tests/test_concurrent.py`: two isolation tests using a thread pool
+  against the live service: (1) parallel ingest of distinct facts across
+  three users, no leakage in `/users/.../memories`; (2) two users sharing
+  the same `session_id` literal, no leakage in `/recall`.
+- `/search` session-only fix (`src/api/search.py`,
+  `src/services/retrieval.py`): the contract in task.md §3 makes both
+  `user_id` and `session_id` nullable. `hybrid_search` now accepts
+  `user_id: str | None` and `session_id: str | None` and routes the SQL
+  conditions accordingly. Session-only requests run only the episodic
+  streams (memory facts are user-scoped).
+- Cross-user leak fix in `fetch_recent_turns`
+  (`src/services/assembler.py`): the recent-turns block in `/recall` was
+  filtering only by `session_id`, which leaks between two users that
+  happen to use the same session_id string. Added `user_id` filter when
+  available; surfaced by the new concurrent test.
+- `scripts/smoke.sh`: the exact task.md §7 example as an executable
+  bash script with optional `MEMORY_AUTH_TOKEN` and `BASE` overrides.
+- README: honest-disclosures section listing the synthetic-vs-real gap,
+  the fact that the multi-hop synthetic probes are single-hop multi-fact,
+  and that the cosine gate (not the reranker) drives abstention.
+- `pytest.ini`: registered `concurrent` marker.
+- Repo published at https://github.com/SherkhanAI/memory_service_higg.
+
+**Why.**
+Closing P1 blockers from `v5_plan.md`. The concurrent isolation test
+caught a real shared-session-id leak that the contract suite did not -
+exactly the kind of bug that benchmarking on synthetic probes would
+never have surfaced.
+
+**Result.**
+- Contract: 11/11 pass
+- Persistence: 1/1 pass (after `docker compose stop app && start app`,
+  memory ids and citations identical)
+- Concurrent: 2/2 pass (no cross-user leak; shared session_id isolated
+  per user after the `fetch_recent_turns` fix)
+
+**Next.**
+- v0.5 final LongMemEval N=10/cat (40 q, ~75 min, ~$3) for the
+  submission baseline number.
+- v0.5+ if time: verbatim-quote enforcement in extraction, Anthropic
+  Contextual Retrieval prefix on episodic_turn, lower
+  `MEMORY_DENSE_GATE` from 0.68 to 0.62. Tracked in `v5_plan.md`.
+
+---
+
 ## v0.4.5 — Real LongMemEval-S baseline
 
 **What changed.**
